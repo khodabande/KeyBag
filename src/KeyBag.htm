@@ -1,0 +1,195 @@
+<html>
+<head>
+	<title>KeyBag!</title>
+	<script type="text/javascript" src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
+	<!--<link rel="stylesheet" href="https://bootswatch.com/cosmo/bootstrap.min.css" />-->
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+	<!--<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap-theme.min.css" />-->
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+	<script type="text/javascript" src="https://bitwiseshiftleft.github.io/sjcl/sjcl.js"></script>
+</head>
+<body>
+	<style>
+		#main {
+			width: 512px;
+			margin: 20px auto;
+		}
+		.panel .block > div {
+			display: inline-block;
+			width: 140px;
+		}
+		.panel .block > a {
+			display: inline-block;
+		}
+		.data-table > tbody > tr > td:last-child {
+			width: 50px;
+		}
+		#button-load {
+			overflow: hidden;
+			position: relative;
+		}
+		#file-chooser {
+			display: block;
+			position: absolute;
+			opacity: 0;
+			overflow: hidden;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+		}
+	</style>
+	<div id="main">
+		<h2>KeyBag! <small>Save your passwords before you lose them.</small></h2>
+		<div class="panel panel-primary">
+			<div class="panel-heading">
+				Your KeyBag!
+			</div>
+			<div class="panel-body">
+				<table class="table table-striped data-table">
+					<thead>
+						<tr>
+							<th>Title</th>
+							<th>Username</th>
+							<th>Password</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr id="insert-row">
+							<td><input id="input-title" class="form-control input-sm" type="text" /></td>
+							<td><input id="input-username" class="form-control input-sm" type="password" /></td>
+							<td><input id="input-password" class="form-control input-sm" type="password" /></td>
+							<td><a id="button-add" title="Add" href="#" class="btn btn-success btn-md"><span class="glyphicon glyphicon-plus"></span></a></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="block text-right">
+					<a id="button-new" title="New bag" href="#" class="btn btn-primary btn-lg"><span class="glyphicon glyphicon-file"></span></a>
+					<a id="button-load" title="Load a bag" href="#" class="btn btn-primary btn-lg"><span class="glyphicon glyphicon-folder-open"></span><input type="file" name="file-chooser" id="file-chooser" /></a>
+					<a id="button-save" title="Save this bag" href="#" class="btn btn-primary btn-lg"><span class="glyphicon glyphicon-save"></span></a>
+				</div>
+			</div>
+			<div class="panel-footer">
+				This app is completely offline; your data will be kept private. Check <a href="https://github.com/khodabande/KeyBag">source on github</a>.
+			</div>
+		</div>
+	</div>
+	<div id="password-modal" class="modal fade" role="dialog">
+		<div class="modal-dialog modal-sm">
+			<div class="modal-content">
+				<div class="modal-body">
+					<h3 class="text-center">Master Password</h3>
+					<input id="master-password" class="form-control" type="password" />
+				</div>
+				<div class="modal-footer">
+					<button id="ok-master-password" type="button" class="btn btn-primary">OK</button>
+					<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script type="text/javascript">
+		var enc = sjcl.encrypt;
+		var dec = sjcl.decrypt;
+		var keybag = [];
+		var loaded = null;
+		function htmlsc(str) {
+			return $('<div/>').text(str).html();
+		}
+		function add_keybag(title, username, password) {
+			if (title == undefined || username == undefined || password == undefined) {
+				title = $('#input-title').val();
+				username = $('#input-username').val();
+				password = $('#input-password').val();
+			}
+			keybag.push({title: title, username: username, password: password});
+			var cipher_text = '********';
+			var row = $('<tr/>').append('<td>'+htmlsc(title)+'</td>');
+			var username_col = $('<td/>').text(cipher_text).appendTo(row);
+			var password_col = $('<td/>').text(cipher_text).appendTo(row);
+			row.append('<td><a title="Remove" onclick="remove_row(this)" href="#" class="btn btn-danger btn-md"><span class="glyphicon glyphicon-remove"></span></a></td>');
+			username_col.mouseenter(function(){
+				username_col.text(htmlsc(username));
+			});
+			username_col.mouseleave(function(){
+				username_col.text(cipher_text);
+			})
+			password_col.mouseenter(function(){
+				password_col.text(htmlsc(password));
+			});
+			password_col.mouseleave(function(){
+				password_col.text(cipher_text);
+			})
+			row.insertBefore('#insert-row');
+			$('#insert-row input').val('');
+		}
+		function reset_keybag() {
+			keybag = [];
+			$('.data-table > tbody > tr:not(#insert-row)').remove();
+			$('#insert-row input').val('');
+		}
+		function load_keybag_array() {
+			$('#password-modal').modal('hide');
+			var password = $('#master-password').val();
+			$('#master-password').val('');
+			var data = loaded;
+			loaded = null;
+			data = dec(password, data);
+			if (!data)
+				return;
+			data = JSON.parse(data);
+			if (!data)
+				return;
+			reset_keybag();
+			$(data).each(function(i,v){add_keybag(v.title, v.username, v.password)});
+		}
+		function load_keybag() {
+			loaded = null;
+			var file = $('#file-chooser').get(0).files[0];
+			if (!file)
+				return;
+			$('#file-chooser').val('');
+			var fileReader = new FileReader();
+			fileReader.onload = function(fileLoadedEvent) {
+				var data = fileLoadedEvent.target.result;
+				data = JSON.parse(data);
+				loaded = data;
+				$('#password-modal').modal('hide');
+				$('#master-password').val('');
+				$('#ok-master-password').unbind('click').on('click', load_keybag_array);
+				$('#password-modal').modal('show');
+			}
+			fileReader.readAsText(file);
+		}
+		function save_keybag_file() {
+			$('#password-modal').modal('hide');
+			var password = $('#master-password').val();
+			$('#master-password').val('');
+			var data = JSON.stringify(keybag);
+			data = JSON.stringify(enc(password, data));
+			data = "data:application/octet-stream," + encodeURIComponent(data);
+			window.open(data, '_blank', '');
+		}
+		function save_keybag() {
+			$('#password-modal').modal('hide');
+			$('#master-password').val('');
+			$('#ok-master-password').unbind('click').on('click', save_keybag_file);
+			$('#password-modal').modal('show');
+		}
+		clicked = false;
+		function remove_row(obj) {
+			var row = $(obj).closest('tr');
+			var index = $('.data-table > tbody > tr').index(row);
+			row.remove();
+			keybag.splice(index, 1);
+		}
+		$(document).ready(function() {
+			$('#button-add').on('click', add_keybag);
+			$('#button-new').on('click', reset_keybag);
+			$('#file-chooser').on('change', load_keybag);
+			$('#button-save').on('click', save_keybag);
+		});
+	</script>
+</body>
+</html>
